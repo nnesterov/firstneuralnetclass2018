@@ -1,0 +1,250 @@
+
+
+<!DOCTYPE html>
+<html>
+
+ 
+<head>
+  <title>activation functions</title>
+  <script src="./DGraph.js"></script>
+  <script src="./NNet.js"></script>
+  <script src="./V2.js"></script>
+  <script src="./MathUtil.js"></script>
+  <script src="./LineLoop.js"></script>
+  <script src="./FullScreenCanvas.js"></script>
+  <script src="./MtxTable.js"></script>
+  
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.2/MathJax.js?config=TeX-MML-AM_CHTML"> 
+  </script>
+
+  <script type="text/x-mathjax-config">
+    MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+  </script>
+  
+
+
+</head>
+<body>
+ 
+  <div>  
+    <span id="canvdiv3">
+      <span style="position:absolute; color:white; padding:5px; font-size:200%"> 
+        "sigmoid"<br>
+        $$\sigma(x) = \frac{1}{1+e^{-x}}$$
+        <br>
+        <br>
+        <div style="color:blue">
+          $$\frac{d}{dx}\sigma(x) = \sigma(x)(1 - \sigma(x))$$
+        </div>
+      </span>
+    </span>
+    
+    <span id="canvdiv2">
+      <span style="position:absolute; color:white; padding:5px; font-size:200%"> 
+        "logit"<br>
+        $$a(x) = log(1+e^x)$$
+        <br>
+        <br>
+        <br>
+        <div style="color:blue">
+          $$\frac{d}{dx}a(x) = \sigma(x)$$
+        </div>
+      </span>
+    </span>
+  </div>
+  <div>
+    <span id="canvdiv4">
+      <span style="position:absolute; color:white; padding:5px; font-size:200%"> 
+        "arctan"<br>
+        $$a(x) = arctan(x)$$
+        <br>
+        <br>
+        <br>
+        <br>
+        <br>
+        <div style="color:blue">
+          $$\frac{d}{dx}\arctan(x) = \frac{1}{1+x^2}$$
+        </div>
+      </span>
+    </span>
+    
+    <span id="canvdiv5">
+      <span style="position:absolute; color:white; padding:5px; font-size:200%"> 
+        "ReLU" (rectified linear unit)<br>
+        $$a(x) = \begin{cases} 
+                        x, & \text{if } x\geq 0\\
+                        0, & \text{otherwise} \end {cases}$$
+        <br>
+        <br>
+        <br>
+        <div style="color:blue">
+          $$\frac{d}{dx}a(x) = \begin{cases}
+                                  1, & \text{if } x\gt 0\\
+                                  ?, & \text{if } x=0\\
+                                  0, & \text{otherwise} \end {cases} $$ 
+        </div>
+      </span>
+    </span>
+  </div>
+  
+  <script>
+    
+    var _canvdiv2 = document.getElementById("canvdiv2");
+    var fc2 = new FullScreenCanvas(undefined, _canvdiv2);
+    
+    var _canvdiv3 = document.getElementById("canvdiv3");
+    var fc3 = new FullScreenCanvas(undefined, _canvdiv3);
+    
+    var _canvdiv4 = document.getElementById("canvdiv4");
+    var fc4 = new FullScreenCanvas(undefined, _canvdiv4);
+    
+    var _canvdiv5 = document.getElementById("canvdiv5");
+    var fc5 = new FullScreenCanvas(undefined, _canvdiv5);
+ 
+    fc2.forceSize(700, 500);
+    fc3.forceSize(700, 500);
+    fc4.forceSize(700, 500);
+    fc5.forceSize(700, 500);
+
+
+    fc2.ctx.lineWidth = "1";
+    fc2.clear();
+    fc2.sc *= 2;
+
+    fc3.ctx.lineWidth = "1";
+    fc3.clear();
+    fc3.sc *= 2;
+    
+    fc4.ctx.lineWidth = "1";
+    fc4.clear();
+    fc4.sc *= 2;
+    
+    fc5.ctx.lineWidth = "1";
+    fc5.clear();
+    fc5.sc *= 2;
+
+
+
+    function sigmoid(x) { 
+      return 1.0 / (Math.exp(-x) + 1);
+    }
+    function dsigmoid(x) { 
+      return sigmoid(x)*(1-sigmoid(x));
+    }
+    function logit(x) { 
+      if(x > 500)
+        return x;
+      return Math.log(1.0 + Math.exp(x)); 
+    }
+    function datan(x) { 
+      return 1/(1+x*x);
+    }
+
+    function grid(canv) { 
+      canv.line(new V2(0,-5), new V2(0,5), "grey");
+      canv.line(new V2(5,0), new V2(-5, 0), "grey");
+      for(var i = -5; i < 5; i++) { 
+        canv.line(new V2(i,-0.25), new V2(i,0.25), "grey");
+        canv.line(new V2(0.25,i), new V2(-0.25, i), "grey");
+      }
+    }
+    
+    var sel = undefined;
+  
+    function mainloop() { 
+
+      fc5.clear();
+      fc4.clear();
+      fc3.clear();
+      fc2.clear();
+      grid(fc5);
+      grid(fc4);
+      grid(fc3);
+      grid(fc2);
+        
+
+
+      var xp = -5;
+      for(var x = -5; x < 5; x+= 0.01) { 
+        fc3.line(
+            new V2(xp, dsigmoid(xp)),
+            new V2(x, dsigmoid(x)), "blue");
+        fc3.line(
+            new V2(xp, sigmoid(xp)),
+            new V2(x, sigmoid(x)), "white");
+          
+
+
+        
+        fc2.line(
+            new V2(xp, sigmoid(xp)),
+            new V2(x, sigmoid(x)), "blue");
+        fc2.line(
+            new V2(xp, logit(xp)),
+            new V2(x, logit(x)), "white");
+
+
+        fc5.line(
+            new V2(xp, x > 0 ? 1 : 0),
+            new V2(x, x > 0 ? 1 : 0), "blue");
+        fc5.line(
+            new V2(xp, x > 0 ? x : 0),
+            new V2(x, x > 0 ? x : 0), "white");
+        
+        
+        fc4.line(
+            new V2(xp, datan(xp)),
+            new V2(x, datan(x)), "blue");
+
+        fc4.line(
+            new V2(xp, Math.atan(xp)),
+            new V2(x, Math.atan(x)), "white");
+
+
+        xp = x;
+      }
+      
+      if(sel) { 
+        fc3.arrow(
+           new V2(sel.x, sigmoid(sel.x)),
+          (new V2(sel.x, sigmoid(sel.x))).clonePlus(new V2(1, dsigmoid(sel.x))), 0.2, 0, "red" );
+        fc2.arrow(
+           new V2(sel.x, logit(sel.x)),
+          (new V2(sel.x, logit(sel.x))).clonePlus(new V2(1, sigmoid(sel.x))), 0.2, 0, "red" );
+        fc4.arrow(
+           new V2(sel.x, Math.atan(sel.x)),
+          (new V2(sel.x, Math.atan(sel.x))).clonePlus(new V2(1, datan(sel.x))), 0.2, 0, "red" );
+        fc5.arrow(
+            new V2(sel.x, sel.x > 0 ? sel.x : 0),
+            (new V2(sel.x, sel.x > 0 ? sel.x : 0)).clonePlus(new V2(1, sel.x > 0 ? 1 : 0)), 0.2, 0, "red" );
+    
+    
+    
+    
+      }
+    }
+    setTimeout(mainloop,5);
+
+    _canvdiv2.onclick = function(evt) { 
+      sel = fc2.clickCoord(evt);
+      mainloop();
+    }
+    _canvdiv3.onclick = function(evt) { 
+      sel = fc3.clickCoord(evt);
+      mainloop();
+    }
+    _canvdiv4.onclick = function(evt) { 
+      sel = fc4.clickCoord(evt);
+      mainloop();
+    }
+    _canvdiv5.onclick = function(evt) { 
+      sel = fc5.clickCoord(evt);
+      mainloop();
+    }
+
+    
+
+  
+  </script>
+</body>
+</html>

@@ -1,0 +1,492 @@
+
+
+<!DOCTYPE html>
+<html>
+
+ 
+<head>
+  <title>backprop</title>
+  <script src="./DGraph.js"></script>
+  <script src="./NNet.js"></script>
+  <script src="./V2.js"></script>
+  <script src="./MathUtil.js"></script>
+  <script src="./LineLoop.js"></script>
+  <script src="./FullScreenCanvas.js"></script>
+  <script src="./MtxTable.js"></script>
+  
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.2/MathJax.js?config=TeX-MML-AM_CHTML"> 
+  </script> 
+
+  <script type="text/x-mathjax-config">
+    MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+  </script>
+  
+
+
+</head>
+<body>
+
+  <div style="padding:40px; font-size:300%">
+    We need to know $\frac{d}{d\text{NodeOutput}} (\text{loss})$ for the top level output nodes first. For example, if we're using least squares loss, the loss is 
+    $$loss = (\text{NodeOutput} - Y)^2$$
+    $$\frac{d}{d\text{NodeOutput}}(loss) = 2\times(\text{NodeOutput} - Y)$$
+
+    Then we can use the chain rule to calculate $\frac{d}{d\text{NodeInput}}(\text{loss}) = \frac{d}{d\text{NodeInput}}(\text{NodeOutput}) \times \frac{d}{d\text{NodeOutput}}(\text{loss})$
+  </div>  
+  <div style="padding:40px; font-size:300%">
+    $\frac{d}{d\text{NodeInput}}(\text{NodeOutput})$ is just the derivative of a node's activation function
+  </div>  
+  <div style="padding:40px; font-size:300%">
+    That's the basic chain rule. If changing some node's output by a tiny bit $\epsilon$ changes the loss by amount $Z\times\epsilon$, and we know that changing the node's input by the tiny amount $epsilon$ causes the node's output to change by $Y\times\epsilon$, then changing the nodes input by $epsilon$ will via a chain effect cause the loss to change by $Y \times Z \times \epsilon$
+  </div>  
+  <div style="padding:40px; font-size:300%">
+    If changing a child node's input by $epsilon$ causes the loss to change by an amount $X\times\epsilon$ then changing the parent node's output will affect the loss via that specific child by changing it by an amount equal to $W \times X \times \epsilon$, where $W$ is the weight connecting the two nodes.
+  </div>
+  <div style="padding:40px; font-size:300%">
+    $$\frac{d}{d\text{ParentOutput}}(\text{loss}) = \sum_{C : each child} \left( \frac{d}{d \text{C's Input}}(loss) \times ( \text{weight from parent to C} )   \right) $$ 
+    This is true via the multidimensional chain rule
+  </div>
+  <div style="padding:40px; font-size:300%">
+    The affect of the weights on the loss is also visible here
+    $$ChildInput = \sum_{P : each parent} \left( (\text{P's output}) \times (\text{connecting weight}) \right) $$
+    Since only one term in that sum depends on a specific weight, we can see that:
+    $$\frac{d}{d\text{Weight}}(ChildInput) = (\text{Corresponding parent's output})$$
+    Then appling the chain rule again we get
+    $$\frac{d}{d\text{Weight}}(ChildInput) \times \frac{d}{d\text{ChildInput}}(loss) = \frac{d}{d\text{Weight}}(loss) $$
+    $$ \cdots = \text{Corresponding parent's output} \times \frac{d}{d\text{ChildInput}}(loss) $$
+
+
+  </div>
+
+  <div id="canvdiv3">
+  
+    <!-- 
+    <div id="tx" style="position:absolute; color:white; text-align:center; padding:10px; border:1px solid white; border-radius:20px; background-color:rgba(0,0,0,0.9)">
+      <div>val: 3.3</div>
+      <input syle="text"></input>
+    </div> 
+    -->
+
+  </div>
+  <span id="canvdiv2">
+  </span>
+  
+  <script>
+//    
+//    var _canvdiv2 = document.getElementById("canvdiv2");
+//    var fc2 = new FullScreenCanvas(undefined, _canvdiv2);
+//    
+//    var _canvdiv3 = document.getElementById("canvdiv3");
+//    var fc3 = new FullScreenCanvas(undefined, _canvdiv3);
+// 
+//    fc2.forceSize(500, 500);
+//    fc3.forceSize(800, 800);
+//
+//    fc2.ctx.lineWidth = "3";
+//    fc2.clear();
+//
+//    var mainloop = undefined;   
+//    var loop_enq = true; 
+//  
+//    var node_dst = document.getElementById("canvdiv3");
+//    function DNode(pos) { 
+//      
+//      this.base_pos = pos;
+//
+//      pos = fc3.screenCoord(pos);
+//      
+//
+//      var ndiv0 = document.createElement("div");
+//      ndiv0.style.position = "absolute";
+//      ndiv0.style.left = (pos.x+fc3.canv.offsetLeft)+"px"; 
+//      ndiv0.style.top = (pos.y+fc3.canv.offsetTop)+"px"; 
+//      ndiv0.style.color = "white";
+//      //ndiv0.innerHTML = "q";
+//      
+//      var ndiv = document.createElement("div");
+//      ndiv.style.position = "relative";
+//      ndiv.style.color = "white";
+//      ndiv.style.textAlign = "center";
+//      ndiv.style.border = "1px solid white";
+//      ndiv.style.padding = "5px";
+//      ndiv.style.borderRadius = "20px";
+//      ndiv.style.backgroundColor = "rgba(0,0,0,0.5)";     
+//     
+//
+//      ndiv.style.left = "-50%";
+//      
+//      node_dst.appendChild(ndiv0);
+//      ndiv0.appendChild(ndiv);
+//      
+//      ndiv.style.top = "-"+Math.round(ndiv0.offsetHeight/2)+"px";
+//    
+//      this.set = function(v) { 
+//        ndiv.innerHTML = v;
+//      };
+//      this.height = function() { 
+//        return ndiv0.offsetHeight;
+//      };
+//      this.color = function(cc) { 
+//        ndiv.style.color = ""+cc;
+//      ndiv.style.border = "1px solid "+cc;
+//      }
+//      
+//    };
+//    function DWeight(pos, wset_fxn) { 
+//      
+//      this.base_pos = pos;
+//
+//      pos = fc3.screenCoord(pos);
+//      
+//
+//      var ndiv0 = document.createElement("div");
+//      ndiv0.style.position = "absolute";
+//      ndiv0.style.left = (pos.x+fc3.canv.offsetLeft)+"px"; 
+//      ndiv0.style.top = (pos.y+fc3.canv.offsetTop)+"px"; 
+//      ndiv0.style.color = "white";
+//      //ndiv0.innerHTML = "q";
+//      
+//      var ndiv = document.createElement("div");
+//      ndiv.style.position = "relative";
+//      ndiv.style.color = "cyan";
+//      ndiv.style.textAlign = "center";
+//      //ndiv.style.border = "1px solid cyan";
+//      ndiv.style.padding = "2px";
+//      ndiv.style.borderRadius = "20px";
+//      ndiv.style.backgroundColor = "rgba(0,0,0,0.5)";     
+//      //var te = document.createTextNode("");
+//      var te = document.createElement("div");
+//      ndiv.appendChild(te);
+//     
+//      ndiv.style.left = "-50%";
+//      
+//      var sdiv = document.createElement("div");
+//      var slider = document.createElement("input");
+//      slider.type = "range";
+//      slider.min = -5;
+//      slider.max = 5;
+//      slider.step = "any";
+//      slider.style.width = "50px";
+//      slider.value = 0;
+//      ndiv.appendChild(slider);
+//     
+//
+//
+//      node_dst.appendChild(ndiv0);
+//      ndiv0.appendChild(ndiv);
+//      
+//      
+//      //ndiv0.style.top = "-"+Math.round(ndiv0.offsetHeight/2)+"px";
+//    
+//      this.set = function(v) { 
+//        //te.nodeValue = v;
+//        te.innerHTML = v;
+//      };
+//      this.height = function() { 
+//        return ndiv0.offsetHeight;
+//      };
+//      
+//      slider.oninput = function(evt) {
+//        wset_fxn(Number(slider.value));
+//        if(!loop_enq) { 
+//          loop_enq = true;    
+//          setTimeout(mainloop, 50);
+//        }
+//      };
+//
+//      
+//    };
+//
+//
+//
+//    var bases =[];
+//    bases.push(new DNode(new V2(-8,-8))); 
+//    bases.push(new DNode(new V2(0, -8)));
+//    bases.push(new DNode(new V2(8, -8)));
+//
+//    var mid = new DNode(new V2(0, 0));
+//    mid.set("mid");
+//    
+//    var tops = [];
+//    tops.push(new DNode(new V2(-7, 8)));
+//    tops.push(new DNode(new V2(0, 8)));
+//    tops.push(new DNode(new V2(7, 8)));
+//   
+//
+//    var netgen = new NNet();    
+//    mid.node = netgen.addNode(new NNetFxnBasic(0));//0
+//    for(var i = 0; i < 3; i++) {
+//      bases[i].node = netgen.addNode(new NNetFxnBasic(0));//1 + 2i
+//      tops[i].node = netgen.addNode(new NNetFxnBasic(0));//2 + 2i
+//      bases[i].edge = netgen.connectByIds(2*i+1, 0);
+//      tops[i].edge = netgen.connectByIds(0, 2*i+2);
+//    }
+//  
+//
+//    for(var i = 0; i < 3; i++) { 
+//      bases[i].dom_edge = new DWeight(V2Util.sumScale2(bases[i].base_pos, 0.5, mid.base_pos, 0.5), 
+//                              function(val) {  
+//                                bases[i].edge.data.weights[0] = val;
+//                              });
+//    }
+//    
+//    
+//    var rand = new XORShift64Star(335,92315432);
+// 
+//    netgen.addNormalNoiseToWeights(rand, 0.5);
+//    for(var i = 0; i < 3; i++)
+//      bases[i].node.data.input[0] = rand.normal();
+//
+//    function sigmoid(x) { 
+//      return 1/(1+Math.exp(-x));
+//    }
+//    function sigmoid2(x) { 
+//      return 2/(1+Math.exp(-x)) - 1;
+//    }
+//
+//    mainloop = function() {
+//
+//
+//      fc3.clear();
+//      fc2.clear();
+//      
+//      netgen.forwProp();
+//
+//      fc3.ctx.strokeStyle = "white";
+//      fc3.ctx.fillStyle="blue"; 
+//      mid.set("output: "+ mid.node.data.output[0].toFixed(2) + "<br>input: "+ mid.node.data.input[0].toFixed(2));
+//      for(var i = 0; i < 3; i++) {
+//        tops[i].set("output: "+ tops[i].node.data.output[0].toFixed(2) + "<br>input: "+ tops[i].node.data.input[0].toFixed(2));
+//        bases[i].set("output: "+ bases[i].node.data.output[0].toFixed(2) + "<br>input: "+ bases[i].node.data.input[0].toFixed(2));
+//        fc3.arrow(bases[i].base_pos, mid.base_pos, 0.2, 3.3);
+//        fc3.arrow(mid.base_pos, tops[i].base_pos, 0.2, 3.3);
+//      }
+//
+//      //dom_wx0.set("w: "+ to_mids[0].data.weights[0].toFixed(2));
+//      //dom_wx1.set("w: "+ to_mids[1].data.weights[0].toFixed(2));
+//      //dom_wx2.set("w: "+ to_mids[2].data.weights[0].toFixed(2));
+//      //dom_wy0.set("w: "+ to_mids[0].data.weights[1].toFixed(2));
+//      //dom_wy1.set("w: "+ to_mids[1].data.weights[1].toFixed(2));
+//      //dom_wy2.set("w: "+ to_mids[2].data.weights[1].toFixed(2));
+//      //
+//      //dom_wb0.set("w: "+ mid_bias[0].data.weights[0].toFixed(2));
+//      //dom_wb1.set("w: "+ mid_bias[1].data.weights[0].toFixed(2));
+//      //dom_wb2.set("w: "+ mid_bias[2].data.weights[0].toFixed(2));
+//      //
+//      //dom_w0r.set("w: "+ from_mids[0].data.weights[0].toFixed(2));
+//      //dom_w1r.set("w: "+ from_mids[1].data.weights[0].toFixed(2));
+//      //dom_w2r.set("w: "+ from_mids[2].data.weights[0].toFixed(2));
+//      //
+//      //dom_w0g.set("w: "+ from_mids[0].data.weights[1].toFixed(2));
+//      //dom_w1g.set("w: "+ from_mids[1].data.weights[1].toFixed(2));
+//      //dom_w2g.set("w: "+ from_mids[2].data.weights[1].toFixed(2));
+//      //
+//      //dom_w0b.set("w: "+ from_mids[0].data.weights[2].toFixed(2));
+//      //dom_w1b.set("w: "+ from_mids[1].data.weights[2].toFixed(2));
+//      //dom_w2b.set("w: "+ from_mids[2].data.weights[2].toFixed(2));
+//      //
+//     
+//      //dom_m0.set("output: "+mids[0].data.output[0].toFixed(2)+"<br>input: "+mids[0].data.input[0].toFixed(2));
+//      //dom_m1.set("output: "+mids[1].data.output[0].toFixed(2)+"<br>input: "+mids[1].data.input[0].toFixed(2));
+//      //dom_m2.set("output: "+mids[2].data.output[0].toFixed(2)+"<br>input: "+mids[2].data.input[0].toFixed(2));
+//      //
+//      //dom_r.set("output: "+outnode.data.model_output[0].toFixed(2)+"<br>input: "+outnode.data.input[0].toFixed(2));
+//      //dom_g.set("output: "+outnode.data.model_output[1].toFixed(2)+"<br>input: "+outnode.data.input[1].toFixed(2));
+//      //dom_b.set("output: "+outnode.data.model_output[2].toFixed(2)+"<br>input: "+outnode.data.input[2].toFixed(2));
+//
+//    ////var to_mids = [];
+//    ////var from_mids = [];
+//    ////var mid_bias = [];
+//      //      
+//      //
+//      //fc3.ctx.fillStyle ="white";
+//      //fc3.fillRect(dom_m0.base_pos.clonePlusXY(-2.3-0.4*2 - 0.1,-0.4*2 - 0.1), dom_m0.base_pos.clonePlusXY(-2.3+0.4*2 + 0.02, 0+0.4*2 + 0.02));
+//      //fc3.fillRect(dom_m1.base_pos.clonePlusXY(-2.3-0.4*2 - 0.1,-0.4*2 - 0.1), dom_m1.base_pos.clonePlusXY(-2.3+0.4*2 + 0.02, 0+0.4*2 + 0.02));
+//      //fc3.fillRect(dom_m2.base_pos.clonePlusXY(2.5-0.4*2 - 0.1,-0.4*2 - 0.1), dom_m2.base_pos.clonePlusXY(2.5+0.4*2 + 0.02, 0+0.4*2 + 0.02));
+//      //
+//      //fc3.fillRect(dom_r.base_pos.clonePlusXY(-2.3-0.4*2 - 0.1,-0.4*2 - 0.1), dom_r.base_pos.clonePlusXY(-2.3+0.4*2 + 0.02, 0+0.4*2 + 0.02));
+//      //fc3.fillRect(dom_g.base_pos.clonePlusXY(-2.3-0.4*2 - 0.1,-0.4*2 - 0.1), dom_g.base_pos.clonePlusXY(-2.3+0.4*2 + 0.02, 0+0.4*2 + 0.02));
+//      //fc3.fillRect(dom_b.base_pos.clonePlusXY(2.5-0.4*2 - 0.1,-0.4*2 - 0.1), dom_b.base_pos.clonePlusXY(2.5+0.4*2 + 0.02, 0+0.4*2 + 0.02));
+//
+//
+//      //var xi = 0;
+//      //for(var x = -2; x < 2; x+=0.05) { 
+//      //  var yi = 0;
+//      //  for(var y = -2; y < 2; y+=0.05) { 
+//      //    innode.data.output[0] = x;
+//      //    innode.data.output[1] = y;
+//      //    netgen.forwProp();
+//      //    var str = "rgb("+
+//      //        Math.floor(outnode.data.model_output[0]*255)+"," +
+//      //        Math.floor(outnode.data.model_output[1]*255)+"," +
+//      //        Math.floor(outnode.data.model_output[2]*255)+")";
+//      //    fc2.ctx.fillStyle = str;
+//      //    fc2.drawCircleFill(new V2(x*3,y*3), 0.1);
+//
+//      //    if(xi % 4 == 0 && yi % 4 == 0) { 
+//      //      var z = Math.floor((mids[0].data.output[0]+1)/2*255);
+//      //      var str = "rgb("+z+","+z+","+z+")";
+//      //      fc3.ctx.fillStyle = str;
+//      //      fc3.drawCircleFill(dom_m0.base_pos.clonePlusXY(x*0.4-2.3,y*0.4), 0.05);
+//      //      
+//      //      var z = Math.floor((mids[1].data.output[0]+1)/2*255);
+//      //      var str = "rgb("+z+","+z+","+z+")";
+//      //      fc3.ctx.fillStyle = str;
+//      //      fc3.drawCircleFill(dom_m1.base_pos.clonePlusXY(x*0.4-2.3,y*0.4), 0.05);
+//      //    
+//      //      var z = Math.floor((mids[2].data.output[0]+1)/2*255);
+//      //      var str = "rgb("+z+","+z+","+z+")";
+//      //      fc3.ctx.fillStyle = str;
+//      //      fc3.drawCircleFill(dom_m2.base_pos.clonePlusXY(x*0.4+2.5,y*0.4), 0.05);
+//      //      
+//      //      var z = Math.floor((outnode.data.model_output[0]+0)/1*255);
+//      //      var str = "rgb("+z+","+z+","+z+")";
+//      //      fc3.ctx.fillStyle = str;
+//      //      fc3.drawCircleFill(dom_r.base_pos.clonePlusXY(x*0.4-2.3,y*0.4), 0.05);
+//      //      
+//      //      var z = Math.floor((outnode.data.model_output[1]+0)/1*255);
+//      //      var str = "rgb("+z+","+z+","+z+")";
+//      //      fc3.ctx.fillStyle = str;
+//      //      fc3.drawCircleFill(dom_g.base_pos.clonePlusXY(x*0.4-2.3,y*0.4), 0.05);
+//      //    
+//      //      var z = Math.floor((outnode.data.model_output[2]+0)/1*255);
+//      //      var str = "rgb("+z+","+z+","+z+")";
+//      //      fc3.ctx.fillStyle = str;
+//      //      fc3.drawCircleFill(dom_b.base_pos.clonePlusXY(x*0.4+2.5,y*0.4), 0.05);
+//      //    }
+//
+//      //    yi++;
+//      //  }
+//      //  xi++;
+//      //}
+//
+//      //fc3.ctx.lineWidth = "1";
+//      //fc3.ctx.strokeStyle = "purple";
+//      //fc3.drawCircle(dom_m0.base_pos.clonePlusXY(sel.x * 0.4 - 2.3, sel.y * 0.4), 0.1);
+//      //fc3.drawCircle(dom_m1.base_pos.clonePlusXY(sel.x * 0.4 - 2.3, sel.y * 0.4), 0.1);
+//      //fc3.drawCircle(dom_m2.base_pos.clonePlusXY(sel.x * 0.4 + 2.5, sel.y * 0.4), 0.1);
+//      //fc3.drawCircle(dom_r.base_pos.clonePlusXY(sel.x * 0.4 - 2.3, sel.y * 0.4), 0.1);
+//      //fc3.drawCircle(dom_g.base_pos.clonePlusXY(sel.x * 0.4 - 2.3, sel.y * 0.4), 0.1);
+//      //fc3.drawCircle(dom_b.base_pos.clonePlusXY(sel.x * 0.4 + 2.5, sel.y * 0.4), 0.1);
+//      //
+//      //innode.data.output[0] = sel.x;
+//      //innode.data.output[1] = sel.y;
+//      //netgen.forwProp();
+//      //
+//
+//      //fc3.line(
+//      //  dom_m1.base_pos.clonePlusXY((-6)*0.2+0.1,0.7+0),
+//      //  dom_m1.base_pos.clonePlusXY((6)*0.2+0.1,0.7), "grey"); 
+//      //fc3.line(
+//      //  dom_m1.base_pos.clonePlusXY(0.1,0.7+0.5),
+//      //  dom_m1.base_pos.clonePlusXY(0.1,0.7-0.4), "grey"); 
+//      //for(var xx = -6; xx < 6; xx += 0.1) { 
+//      //  fc3.line(
+//      //    dom_m1.base_pos.clonePlusXY((xx-0.1)*0.13+0.1,0.7+0.5*sigmoid2(xx-0.1)),  
+//      //    dom_m1.base_pos.clonePlusXY((xx)*0.13+0.1,0.7+0.5*sigmoid2(xx)), "orange"); 
+//      //}
+//      //fc3.drawCircle(dom_m1.base_pos.clonePlusXY((mids[1].data.input[0])*0.13+0.1,0.7+mids[1].data.output[0]*0.5), 0.1);
+//     
+//      //fc3.line(
+//      //  dom_m0.base_pos.clonePlusXY((-6)*0.2+0.1,0.7+0),
+//      //  dom_m0.base_pos.clonePlusXY((6)*0.2+0.1,0.7), "grey"); 
+//      //fc3.line(
+//      //  dom_m0.base_pos.clonePlusXY(0.1,0.7+0.5),
+//      //  dom_m0.base_pos.clonePlusXY(0.1,0.7-0.4), "grey"); 
+//      //for(var xx = -6; xx < 6; xx += 0.1) { 
+//      //  fc3.line(
+//      //    dom_m0.base_pos.clonePlusXY((xx-0.1)*0.13+0.1,0.7+0.5*sigmoid2(xx-0.1)),  
+//      //    dom_m0.base_pos.clonePlusXY((xx)*0.13+0.1,0.7+0.5*sigmoid2(xx)), "orange"); 
+//      //}
+//      //fc3.drawCircle(dom_m0.base_pos.clonePlusXY((mids[0].data.input[0])*0.13+0.1,0.7+mids[0].data.output[0]*0.5), 0.1);
+//     
+//      //
+//      //fc3.line(
+//      //  dom_m2.base_pos.clonePlusXY((-6)*0.2+0.1,0.7+0),
+//      //  dom_m2.base_pos.clonePlusXY((6)*0.2+0.1,0.7), "grey"); 
+//      //fc3.line(
+//      //  dom_m2.base_pos.clonePlusXY(0.1,0.7+0.5),
+//      //  dom_m2.base_pos.clonePlusXY(0.1,0.7-0.4), "grey"); 
+//      //for(var xx = -6; xx < 6; xx += 0.1) { 
+//      //  fc3.line(
+//      //    dom_m2.base_pos.clonePlusXY((xx-0.1)*0.13+0.1,0.7+0.5*sigmoid2(xx-0.1)),  
+//      //    dom_m2.base_pos.clonePlusXY((xx)*0.13+0.1,0.7+0.5*sigmoid2(xx)), "orange"); 
+//      //}
+//      //fc3.drawCircle(dom_m2.base_pos.clonePlusXY((mids[2].data.input[0])*0.13+0.1,0.7+mids[2].data.output[0]*0.5), 0.1);
+//     
+//
+//
+//
+//
+//
+//      //
+//      //fc3.line(
+//      //  dom_r.base_pos.clonePlusXY((-6)*0.2+0.1,0.7+0),
+//      //  dom_r.base_pos.clonePlusXY((6)*0.2+0.1,0.7), "grey"); 
+//      //fc3.line(
+//      //  dom_r.base_pos.clonePlusXY(0.1,0.7+0.9),
+//      //  dom_r.base_pos.clonePlusXY(0.1,0.7-0.4), "grey"); 
+//      //for(var xx = -6; xx < 6; xx += 0.1) { 
+//      //  fc3.line(
+//      //    dom_r.base_pos.clonePlusXY((xx-0.1)*0.13+0.1,0.7+0.5*sigmoid(xx-0.1)),  
+//      //    dom_r.base_pos.clonePlusXY((xx)*0.13+0.1,0.7+0.5*sigmoid(xx)), "orange"); 
+//      //}
+//      //fc3.drawCircle(dom_r.base_pos.clonePlusXY((outnode.data.input[0])*0.13+0.1,0.7+outnode.data.model_output[0]*0.5), 0.1);
+//      //
+//      //fc3.line(
+//      //  dom_g.base_pos.clonePlusXY((-6)*0.2+0.1,0.7+0),
+//      //  dom_g.base_pos.clonePlusXY((6)*0.2+0.1,0.7), "grey"); 
+//      //fc3.line(
+//      //  dom_g.base_pos.clonePlusXY(0.1,0.7+0.9),
+//      //  dom_g.base_pos.clonePlusXY(0.1,0.7-0.4), "grey"); 
+//      //for(var xx = -6; xx < 6; xx += 0.1) { 
+//      //  fc3.line(
+//      //    dom_g.base_pos.clonePlusXY((xx-0.1)*0.13+0.1,0.7+0.5*sigmoid(xx-0.1)),  
+//      //    dom_g.base_pos.clonePlusXY((xx)*0.13+0.1,0.7+0.5*sigmoid(xx)), "orange"); 
+//      //}
+//      //fc3.drawCircle(dom_g.base_pos.clonePlusXY((outnode.data.input[1])*0.13+0.1,0.7+outnode.data.model_output[1]*0.5), 0.1);
+//      //
+//      //
+//      //fc3.line(
+//      //  dom_b.base_pos.clonePlusXY((-6)*0.2+0.1,0.7+0),
+//      //  dom_b.base_pos.clonePlusXY((6)*0.2+0.1,0.7), "grey"); 
+//      //fc3.line(
+//      //  dom_b.base_pos.clonePlusXY(0.1,0.7+0.9),
+//      //  dom_b.base_pos.clonePlusXY(0.1,0.7-0.4), "grey"); 
+//      //for(var xx = -6; xx < 6; xx += 0.1) { 
+//      //  fc3.line(
+//      //    dom_b.base_pos.clonePlusXY((xx-0.1)*0.13+0.1,0.7+0.5*sigmoid(xx-0.1)),  
+//      //    dom_b.base_pos.clonePlusXY((xx)*0.13+0.1,0.7+0.5*sigmoid(xx)), "orange"); 
+//      //}
+//      //fc3.drawCircle(dom_b.base_pos.clonePlusXY((outnode.data.input[2])*0.13+0.1,0.7+outnode.data.model_output[2]*0.5), 0.1);
+//      //
+//      //
+//      //
+//
+//
+//
+//
+//      //fc2.ctx.lineWidth = "1";
+//      //fc2.ctx.strokeStyle = "white";
+//      //fc2.drawCircle(new V2(sel.x*3,sel.y*3), 0.1);
+//   
+//      //fc3.ctx.font = "20px Arial";
+//      //fc3.ctx.fillStyle = "white"; 
+//      //fc3.text(new V2(0,-10.5), "\"input layer\"");       
+//      //fc3.text(new V2(0,10.5), "\"output layer\"");       
+//      //fc3.ctx.font = "16px Arial";
+//      //fc3.text(new V2(8.5,2.0), "\"hidden layer\"");       
+//
+//      loop_enq = false;
+//    }
+//    loop_enq = true;
+//    setTimeout(mainloop,5);
+//
+
+
+    
+
+  
+  </script>
+</body>
+</html>

@@ -1,0 +1,179 @@
+
+
+<!DOCTYPE html>
+<html>
+
+ 
+<head>
+  <title>gradient descent</title>
+  <script src="./DGraph.js"></script>
+  <script src="./NNet.js"></script>
+  <script src="./V2.js"></script>
+  <script src="./MathUtil.js"></script>
+  <script src="./LineLoop.js"></script>
+  <script src="./FullScreenCanvas.js"></script>
+
+
+</head>
+<body>
+  
+  
+  <div id="canvdiv3">
+  
+    <!-- 
+    <div id="tx" style="position:absolute; color:white; text-align:center; padding:10px; border:1px solid white; border-radius:20px; background-color:rgba(0,0,0,0.9)">
+      <div>val: 3.3</div>
+      <input syle="text"></input>
+    </div> 
+    -->
+
+  </div>
+  <div>
+    click on canvas to step
+  </div>
+  <div>
+  <input type="button" id="reset" value="reset"></input>
+  </div>
+  <div>
+  <input type="button" id="changefxn" value="changefxn"></input>
+  </div>
+  <span id="canvdiv2">
+  </span>
+  <div id="sv"> 
+  </div>
+  <script>
+      
+    var gd_step = 0.25;
+    var slider = document.createElement("input");
+    slider.type = "range";
+    slider.min = 0.0001;
+    slider.max = 5.0;
+    slider.step = "any";
+    slider.style.width = "100px";
+    slider.value = gd_step;
+    document.body.appendChild(slider);
+    document.getElementById("sv").innerHTML = "step_size = " +gd_step;
+     
+    slider.oninput = function(evt) {
+      gd_step = slider.value;
+      document.getElementById("sv").innerHTML = "step_size = "+gd_step;
+    }
+
+    
+    var _canvdiv3 = document.getElementById("canvdiv3");
+    var fc3 = new FullScreenCanvas(undefined, _canvdiv3);
+ 
+    var fxnA = function(x) { 
+      x *= 3;
+      return 0.1*( Math.sin(x)*0.6 + x*x/20.0 + Math.log(1+Math.exp(x))*2.0  - Math.log(1+Math.exp(x-11))*12.0 + Math.log(1+Math.exp(x-13))*12.0)-4;
+    }
+    var fxnB = function(x) { 
+      x *= 3;
+      return Math.sin(x*5)*0.7 + x*x/ 150 - 10;
+    };
+    var fxnC = function(x) { 
+      x *= 2;
+      return -10 / (x*x + 1);
+    };
+    var fxnD = function(x) { 
+      x *= 3;
+      return x*x/ 150 - 10;
+    };
+    fxn = fxnD;
+
+    fc3.forceSize(1400, 800);
+
+    var rand = new XORShift64Star(335,92315432);
+    var cur_x = rand.random() * 20 - 10;
+    
+    var last_pos = cur_x;
+    var stuck_ct = 0;
+
+    fc3.clear();
+    var mainloopSkip = function() { 
+      mainloop(true);
+    }
+    mainloop = function(skip_step) {
+
+      fc3.ctx.globalAlpha = 0.2;
+      fc3.clear();
+      fc3.ctx.globalAlpha = 1.0;
+      
+      var step = 0.025;
+      for(var x = -20; x < 20; x+= step) { 
+        fc3.line(new V2(x-step, fxn(x-step)), new V2(x, fxn(x)), "white");
+      }
+      
+      var deriv = (fxn(cur_x + 0.0001) - fxn(cur_x - 0.0001))/0.0002;
+      if(!skip_step) {
+        cur_x -= deriv * gd_step;
+        deriv = (fxn(cur_x + 0.0001) - fxn(cur_x - 0.0001))/0.0002;
+      } else
+        console.log("skip");
+      console.log("gd step", gd_step, "deriv", deriv, "delta", deriv*gd_step);
+
+      fc3.arrow(new V2(cur_x, fxn(cur_x)), new V2(cur_x - deriv*0.5, fxn(cur_x) - deriv*deriv*0.5), 0.1, 0);
+      fc3.line(new V2(cur_x, fxn(cur_x)+2), new V2(cur_x, fxn(cur_x)-2), "yellow");
+      
+      fc3.ctx.strokeStyle = "cyan";
+      fc3.drawCircle(new V2(cur_x, fxn(cur_x)), 0.1);
+
+
+      if(Math.abs(cur_x) - last_pos > 0.05) {
+        last_pos = cur_x;
+        stuck_ct = 0;
+      } else { 
+        stuck_ct++;
+      }
+      if(stuck_ct == 100) { 
+        //fc3.clear();
+        stuck_ct = 0;
+        console.log("super stuck");
+        //cur_x = rand.random()*20 - 10;
+      }
+
+        
+      //setTimeout(mainloop,150);
+
+      loop_enq = false;
+    }
+    loop_enq = true;
+    setTimeout(mainloopSkip,5);
+    
+    _canvdiv3.onclick = function(evt) { 
+      mainloop(false);
+    }
+
+    document.getElementById("reset").onclick = function(evt) { 
+      fc3.clear();
+      stuck_ct = 0;
+      cur_x = rand.random()*30 - 15;
+      mainloop(true);
+    };
+    document.getElementById("changefxn").onclick = function(evt) { 
+      fc3.clear();
+      stuck_ct = 0;
+      cur_x = rand.random()*30 - 15;
+      if(fxn === fxnA) { 
+        console.log("swap fxns");
+        fxn = fxnB;
+      } else if(fxn === fxnB) {
+        fxn = fxnC;
+      } else if(fxn === fxnC) {
+        fxn = fxnD;
+      } else {
+        fxn = fxnA;
+      }
+      
+      mainloop(true);
+
+    };
+
+    
+
+    
+
+  
+  </script>
+</body>
+</html>

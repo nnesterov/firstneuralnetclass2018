@@ -1,0 +1,117 @@
+
+<!DOCTYPE html>
+<html>
+
+ 
+<head>
+  <script src="./DGraph.js"></script>
+  <script src="./NNet.js"></script>
+  <script src="./V2.js"></script>
+  <script src="./MathUtil.js"></script>
+  <script src="./LineLoop.js"></script>
+  <script src="./FullScreenCanvas.js"></script>
+  <script src="./basic_neuron.js"></script>
+
+  
+  <div id="canvdiv3">
+  </div>
+
+</head>
+<body>
+  <div>
+    What is a neural network?
+  </div>
+  <script>
+
+  var _canvdiv3 = document.getElementById("canvdiv3");
+  var fc3 = new FullScreenCanvas(undefined, _canvdiv3);
+  fc3.forceSize(800, 800);
+
+
+  //create input and output nodes
+  var input_node = new BasicNeuron({is_input:true});
+  var bias_node = new BasicNeuron({is_input:true});
+  bias_node.input = 1.0;
+  var output_node = new BasicNeuron({is_output:true});
+
+  var net = new NeuralNetwork();
+  
+  //create a first hidden layer
+  var hidden_layer0 = [];
+  net.nodes.push(input_node);
+  net.nodes.push(bias_node);
+  for(var i=  0; i < 25; i++) { 
+    var addee = new BasicNeuron();
+    net.nodes.push(addee);
+    //connect this hidden layer to our input node
+    input_node.addChild(addee, 2.4*(Math.random()-0.5));
+    //connect the bias node to this hidden layer
+    bias_node.addChild(addee, 0.4*(Math.random()-0.5));
+    //record hidden layer nodes for later
+    hidden_layer0.push(addee);
+  }
+  
+  
+  //create a second (and last) hidden layer
+  for(var i=  0; i < 25; i++) { 
+    var addee = new BasicNeuron();
+    for(var j = 0; j < hidden_layer0.length; j++)
+      hidden_layer0[j].addChild(addee, 1.5*(Math.random() - 0.5));
+    net.nodes.push(addee);
+    //connect the output of this hidden layer to our output node
+    addee.addChild(output_node, 1.0*(Math.random() - 0.5));
+    //add the bias node here too
+    bias_node.addChild(addee, 0.4*(Math.random()-0.5));
+  }
+
+  bias_node.addChild(output_node, 0);
+  net.nodes.push(output_node);
+
+  var data = [];
+  var tmp2 = 0;
+  var tmp = 0;
+  for(var i = 0; i < 100; i++) { 
+    var x = (i-50)/40;
+    tmp2 += (Math.random()-0.5)*0.1 - tmp*0.01;
+    tmp += tmp2;
+    var y = tmp * 0.2;
+    data.push({X:x,Y:y});
+  }
+
+  fc3.sc *= 5;  
+
+  function mainLoop() {
+    fc3.clear();
+    for(var i = 0; i < data.length-1; i++) { 
+      fc3.line(new V2(data[i].X, data[i].Y*3), new V2(data[i+1].X, data[i+1].Y*3), "white");
+    }
+    for(var i = 0; i < data.length; i++) { 
+      input_node.input = data[i].X;
+      output_node.training_output = data[i].Y
+      net.forwardPropogate();
+      net.backPropogate();
+      net.trainWeights(0.01);
+    };
+    for(var i = 0; i < data.length-1; i++) {
+      input_node.input = data[i].X;
+      net.forwardPropogate();
+      var y0 = output_node.output;
+      input_node.input = data[i+1].X;
+      net.forwardPropogate();
+      var y1 = output_node.output;
+
+      //console.log(y0);
+      fc3.line(new V2(data[i].X, y0*3), new V2(data[i+1].X, y1*3), "cyan");
+      
+    }
+    setTimeout(mainLoop, 0);
+  }
+
+  mainLoop();
+
+
+
+  </script>
+</body>
+</html>
+

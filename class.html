@@ -1,0 +1,242 @@
+
+
+<!DOCTYPE html>
+<html>
+
+ 
+<head>
+  <title>test</title>
+  <script src="./DGraph.js"></script>
+  <script src="./NNet.js"></script>
+  <script src="./V2.js"></script>
+  <script src="./MathUtil.js"></script>
+  <script src="./LineLoop.js"></script>
+  <script src="./FullScreenCanvas.js"></script>
+  <script src="./MtxTable.js"></script>
+
+</head>
+<body>
+
+  
+  <div id="canvdiv2">
+  </div>
+  <div id="canvdiv3">
+  </div>
+
+  <div style="font-size:200%">
+  </div>
+  
+  <script>
+   
+    var _canvdiv2 = document.getElementById("canvdiv2");
+    var fc2 = new FullScreenCanvas(undefined, _canvdiv2);
+    fc2.forceSize(500, 500);
+    var _canvdiv3 = document.getElementById("canvdiv3");
+    var fc3 = new FullScreenCanvas(undefined, _canvdiv3);
+    fc3.forceSize(500, 500);
+
+    var train_files = [];
+    var test_files = [];
+    
+    var run_idx = 0;
+
+
+    var g = new NNet();
+    var rand = new XORShift64Star(335,Date.now());
+    //var rand = new XORShift64Star(335,92315432);
+
+
+    var innode = g.addNode(new NNetInput(2)).data; //0
+    g.addNode(new NNetBias(1.0)); //1
+    //var outnode = g.addNode(new NNetSquaredLoss(3)).data; //2
+    var outnode = g.addNode(new NNetSoftMaxCrossEntropyLoss(3)).data;//2
+      
+    //var step0 = 8;
+    //var step1 = 8;
+    //for(var i = 0; i < step0 + step1; i++)
+    //  g.addNode(new NNetFxnBasic(0)); //3-42
+    //
+    //for(var i = 0; i < step0; i++) { 
+    //  g.connectByIds(0, 3+i);
+    //  g.connectByIds(1, 3+i);
+    //}
+    //for(var j = 0; j < step1; j++) { 
+    //  g.connectByIds(1, 3+step0+j);
+    //  for(var i = 0; i <  step0; i++) { 
+    //    g.connectByIds(3+i, 3+step0+j);
+    //  }
+    //}
+    //for(var j = 0; j < step1; j++) { 
+    //  g.connectByIds(3+step0+j, 2);
+    //}
+    ////g.connectByIds(1, 2);
+    
+    //g.connectByIds(0, 2);
+
+    var midct = 10;
+    
+    //TODO: why do we only see horizontal lines?
+    //debug this....
+    for(var q = 0; q < midct; q++) { 
+      //g.addNode(new NNetFxnBasic(0)); //3-42
+      g.addNode(new NNetFxnBasic(0)); //3-42
+      var e = g.connectByIds(0,3+q);
+    }
+  
+    //g.connectByIds(20, 30);
+    
+    g.addNormalNoiseToWeights(rand, 5.0);
+    
+    
+    
+    //from mid to output
+    for(var q = 0; q < midct; q++) { 
+      var e = g.connectByIds(3+q,2);
+    }
+    
+    g.addNormalNoiseToWeights(rand, 1.11);
+    
+    //from bias to mid 
+    for(var q = 0; q < midct; q++) { 
+      var e = g.connectByIds(1,3+q);
+    }
+    
+    g.addNormalNoiseToWeights(rand, 0.5);
+
+    
+    
+    
+    //g.connectByIds(1, 2);
+    
+    //g.addNormalNoiseToWeights(rand, 0.00);
+
+    fc2.clear();
+    fc3.clear();
+    var idx = 0;
+    var offs = 0;
+    var saw_imgs = 0;
+    var loss_sum = 0;
+    fc2.onepx.data[3] = 255;
+    fc3.onepx.data[3] = 255;
+    var lctr = 0;
+    var loss_sum = 0;
+
+    var c0 = 0;
+    var c1 = 0;
+    var c2 = 0;
+    var tot = 0;
+    var rate = 0.05;
+    var start = true;
+    function mainLoop() { 
+
+      var x = rand.random()*500 - 250;
+      var y = rand.random()*500 - 250;
+
+      var type = 0;
+      if(y >= Math.abs(x)) {
+        if(c1 > tot/2.9 + 100) {
+          setTimeout(mainLoop, 1);
+          return; 
+        }
+        type = 1;
+        fc2.onepx.data[0] = 0;
+        fc2.onepx.data[1] = 255;
+        fc2.onepx.data[2] = 0;
+        c1++;
+      } else if((x*x + (y+150)*(y+150)) < 90*90) { 
+        if(c2 > tot/2.9 + 100) {
+          setTimeout(mainLoop, 1);
+          return; 
+        }
+        type = 2;
+        fc2.onepx.data[0] = 0;
+        fc2.onepx.data[1] = 0;
+        fc2.onepx.data[2] = 255;
+        c2++;
+      } else { 
+        if(c0 > tot/2.9 + 100) {
+          setTimeout(mainLoop, 1);
+          return; 
+        }
+        fc2.onepx.data[0] = 255;
+        fc2.onepx.data[1] = 0;
+        fc2.onepx.data[2] = 0;
+        c0++;
+      }
+
+      c0 *= 0.9999;
+      c1 *= 0.9999;
+      c2 *= 0.9999;
+      tot = c0 + c1 + c2;
+
+      fc2.pixelDirect(new V2(x+250,y+250));
+      
+      innode.output[0] = x/150;
+      innode.output[1] = y/150;
+      outnode.data_output[0] = (type == 0) ? 1 : 0;
+      outnode.data_output[1] = (type == 1) ? 1 : 0;
+      outnode.data_output[2] = (type == 2) ? 1 : 0;
+
+      if(!start) { 
+        g.forwProp();
+        g.backProp();
+        //g.learnWithMomentum(0.00001, 0.9995);
+        g.learnWithMomentum(rate, 0.94);
+        g.addNormalNoiseToWeights(rand, 0.000001);
+        //g.learnWithMomentum(0.500001, 0.4);
+      }
+      loss_sum += g.loss();
+       
+      if(lctr % 100 == 0) { 
+        console.log((lctr % 500)/500);
+      }
+      if(lctr % 500 == 0) { 
+        start = false;
+        console.log("update",loss_sum);
+        rate *= 0.8;
+        if(rate < 0.00001)
+          rate = 0.00001;
+        loss_sum = 0;
+        //for(var i = 0; i < 20; i++) { 
+        //  for(var j = 0; j < 20; j++) { 
+        for(var i = 0; i < 30; i++) { 
+          for(var j = 0; j < 30; j++) { 
+            //var x0 = (i-250);//(i-10)/10*250;
+            //var y0 = (j-250);//(j-10)/10*250;
+            //var x0 = (i-10)/10*250;
+            //var y0 = (j-10)/10*250;
+            var x0 = (i-15)/15*250;
+            var y0 = (j-15)/15*250;
+            innode.output[0] = x0/150 * 1.0;
+            innode.output[1] = y0/150 * 1.0;
+            g.forwProp();
+            if((i < 3 && j < 3) || (i > 97 && j > 97)) 
+              console.log("==",outnode.model_output+"");
+            fc3.ctx.fillStyle = "rgb(" + 
+              Math.floor(255*outnode.model_output[0]) + "," +
+              Math.floor(255*outnode.model_output[1]) + "," +
+              Math.floor(255*outnode.model_output[2]) + ")";
+            fc3.drawCircleFill(new V2((i-15)/2.5, -(j-15)/2.5), 0.2);
+            //fc3.onepx.data[0] = 255*outnode.model_output[0];
+            //fc3.onepx.data[1] = 255*outnode.model_output[1];
+            //fc3.onepx.data[2] = 255*outnode.model_output[2];
+            //fc3.pixelDirect(new V2(x0+250,y0+250));
+          }
+        }
+      }
+
+
+      lctr++;
+      setTimeout(mainLoop, 1);
+    }
+    mainLoop();
+
+
+    
+  </script>
+
+</body>
+
+</html>
+
+

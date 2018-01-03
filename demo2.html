@@ -1,0 +1,242 @@
+
+
+<!DOCTYPE html>
+<html>
+
+ 
+<head>
+  <title>test</title>
+  <script src="./DGraph.js"></script>
+  <script src="./NNet.js"></script>
+  <script src="./V2.js"></script>
+  <script src="./MathUtil.js"></script>
+  <script src="./LineLoop.js"></script>
+  <script src="./FullScreenCanvas.js"></script>
+  <script src="./MtxTable.js"></script>
+
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.2/MathJax.js?config=TeX-MML-AM_CHTML"> 
+  </script>
+  
+  <script type="text/x-mathjax-config">
+    MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+  </script>
+  
+
+
+</head>
+<body style="">
+
+  <div style="text-align:center; font-size:200%"> 
+      <br>
+      <br>
+      <br>
+      <br>
+      <br>
+      <br>
+      Let's call the input for the i-th sample $ X_i $ and desired output $ Y_i $ <br>
+      The value calculated by the network will be called $ \text{net}(X_i) $ 
+      <br>
+      <br>
+      As an example, it might be that $X_i$ is the i-th credit card transaction in our banking system. <br>
+      If the i-th transaction was fraudulent, then $Y_i$ is 1, otherwise $Y_i$ is 0. <br>
+      Define $\text{net}(X_i)$ to represent the probability that the i-th transaction is fraudulent. <br>
+      
+      <br> 
+      <br>
+      Let's say every transaction is independant of every other.<br> 
+      Here's what our example data might look like, if we had say 5 transactions: 
+        $$Y_0 = 1$$
+        $$Y_1 = 0$$
+        $$Y_2 = 0$$
+        $$Y_3 = 1$$
+        $$Y_4 = 1$$
+      The joint probability of all these outcome, according to our network, is going to be: 
+        $$ 
+        \text{net}(X_0)\cdot 
+        (1-\text{net}(X_1))\cdot 
+        (1-\text{net}(X_2))\cdot 
+        \text{net}(X_3)\cdot 
+        \text{net}(X_4)
+        $$
+      <br>
+      If the probability of the network generating our data was high, <br>
+      we could say that our network is a good candidate for generating this data. <br>
+      Therefore we will try to maximize the probability!<br>
+      <br>
+      The strategy for maximization will be gradient ascent/descent<br>
+      The idea is that if you stand on a mountain, and you want to reach the peak,<br>
+      just walk in the direction that is steepest (most uphill).<br>
+      To get the slope (steepness) of a function we need it's derivative.<br>
+      Taking the derivative of huge product (multiplaction) might be tricky.<br>
+      <br>
+      <br>
+      Luckily we know $ log(a\cdot b) = log(a) + log(b) $ <br>
+      Also finding $x$ that maximizes $f(x)$ is the same one that maximizes $log(f(x))$<br>
+      So now we want to maximize:
+        
+      $$ 
+        log(\text{net}(X_0)\cdot 
+        (1-\text{net}(X_1))\cdot 
+        (1-\text{net}(X_2))\cdot 
+        \text{net}(X_3)\cdot 
+        \text{net}(X_4))
+      $$
+      $$ 
+        log(\text{net}(X_0)) + 
+        log((1-\text{net}(X_1))) + 
+        log((1-\text{net}(X_2))) + 
+        log(\text{net}(X_3)) +
+        log(\text{net}(X_4)))
+        $$<br>
+        <br>
+        From these examples we can see that the probability of the network generating the data will be:
+        $$ \text{probability} = \prod_{i=0}^n \left( \text{net}(X_i)^{Y_i} \cdot (1-\text{net}(X_i))^{1-Y_i} \right) $$
+        $$ log(\text{probability}) = \sum_{i=0}^n log\left( \text{net}(X_i)^{Y_i} \cdot (1-\text{net}(X_i))^{1-Y_i} \right) $$
+
+        Let's say the final node of the network has input $q_i$ and that final node computes 
+          $$\text{net}(X_i) = \sigma(q_i) = \frac{1}{1+e^{-q_i}} $$
+        This forces the output of the network to be between 0 and 1 (a probability) and will help later too.<br>
+        <br>
+
+        We want to maximize this probability, but we can only change the weights $w$ of the network.<br>
+        To do steepest ascent on that we need $\frac{d}{dw}(\text{probability})$, which looks really complex.<br>
+        However, maybe we can do something with $\frac{d}{dq_i}log(\text{probability})$ ? <br><br>
+        $$ \frac{d}{dq_i}\sum_{i=0}^n log\left( \text{net}(X_i)^{Y_i} \cdot (1-\text{net}(X_i))^{1-Y_i} \right) $$
+        Since only $X_i$ depends on $q_i$
+        $$ \text{"} =  \frac{d}{dq_i}log\left(\text{net}(X_i)^{Y_i} \cdot (1-\text{net}(X_i))^{1-Y_i}\right)$$
+        now we can split the case into if $Y_i$ is 1 or 0
+        $$ 
+        \text{"} = \begin{cases} 
+          \frac{d}{dq_i}log(net(X_i)), & Y_i=1 \\
+          \frac{d}{dq_i}log(1-net(X_i)), & Y_i=0
+         \end{cases}
+         $$
+        $$ 
+        \text{"} = \begin{cases} 
+        \frac{d}{dq_i}log\left(\frac{1}{1+e^{-q_i}}\right), & Y_i=1 \\
+        \frac{d}{dq_i}log\left(1-\frac{1}{1+e^{-q_i}}\right), & Y_i=0
+         \end{cases}
+         $$
+         $$
+        \text{"} = \begin{cases} 
+        \frac{1+e^{-q_i}}{(1+e^{-q_i})^2}e^{-q_i}, & Y_i=1 \\
+        \frac{d}{dq_i}log\left(\frac{1+e^{-q_i}-1}{1+e^{-q_i}}\right), & Y_i=0
+         \end{cases}
+         $$
+         $$
+        \text{"} = \begin{cases} 
+        \frac{e^{-q_i}}{1+e^{-q_i}}, & Y_i=1 \\
+        \frac{d}{dq_i}log\left(\frac{1}{e^{q_i}+1}\right), & Y_i=0
+         \end{cases}
+         $$
+         $$
+        \text{"} = \begin{cases} 
+        \frac{1+e^{-q_i}-1}{1+e^{-q_i}}, & Y_i=1 \\
+        \frac{e^{q_i}+1}{(e^{q_i}+1)^2}e^{q_i}, & Y_i=0
+         \end{cases}
+         $$
+         $$
+        \text{"} = \begin{cases} 
+        1-\frac{1}{1+e^{-q_i}}, & Y_i=1 \\
+        \frac{e^{q_i}}{e^{q_i}+1}, & Y_i=0
+         \end{cases}
+         $$
+         $$
+         \frac{d}{dq_i}\log(\text{probability}) = \begin{cases} 
+        1-\sigma(q_i), & Y_i = 1 \\
+        \sigma(q_i), & Y_i = 0 
+         \end{cases}
+         $$
+         $$
+         \frac{d}{dq_i}\log(\text{probability}) = Y_i - \text{net}(X_i)
+         $$
+         Wow that's really nice and short! <br>
+         If we can change each $q_i$ a tiny amount proportional to $Y_i - \text{net}(X_i)$ <br>
+         then we will increase the probability of our network generating our data. <br>
+         <br>
+         This makes intuitive sense, because if $Y_i$ is 1, we want $\text{net}(X_i)$ to be 1, and if $Y_i$ is 0, we want $\text{net}(X_i)$ to be 0<br>
+         Quite interestings following this derivative is the same as minimizing the squared error between $\text{net}(X_i)$ and $Y_i$ if our<br>
+         final node computes an identity function rather than a sigmoid.<br>
+         <hr>
+         TL;DR
+         <br>
+         If your net generates $\text{net}(X_i)$ and you wanted $Y_i$. <br> 
+         Adding to the output nodes' inputs by a tiny amount $\epsilon$ changes the log(probability) of the network generating the data by an amount proportional to $\epsilon \cdot (Y_i -\text{net}(X_i))$ <br>
+         Intuitively, the more incorrect your network is for a specific example, the more it should focus on that example.<br>
+         These statement depend on assumptions about noise in your data and how the network is assumed to generate the data.
+         <hr>
+         <br>
+         We will now focus on how to adjust any/all of the weights in order to affect the output nodes<br>
+         Calculating the explicit derivative is important, because according to the multidimensional chain rule:<br>
+         $$\frac{d}{dw}log(\text{probability}) = \sum_{i=0}^n\left( \frac{d}{dq_i}(log(\text{probability})) \cdot \frac{d}{dw}(q_i) \right)$$
+         <br>
+         Now we can worry about $ \frac{d}{dw}q_i $. Now it's time for backpropogation officially. <br>
+         Let's say some node's output $n_j$ has several child nodes, whose inputs are $q_{k_0}, q_{k_1}, q_{k_2}, \dots q_{k_m}$ <br>
+         This means that each of those nodes takes as input the output of $n_j$ via edges $w_{k_0}, w_{k_1}, \dots w_{k_m}$.<br>
+         Assume we know $\frac{d}{dq_{k_i}}log(\text{probability})$ and have stored the value for each child node.
+         According to the multidimensional chain rule:
+          $$
+          \frac{d}{dn_j}log(\text{probability}) = \sum_{i=0}^m \frac{d}{dq_{k_i}}log(\text{probability}) \cdot \frac{d}{dn_j} q_{k_i}
+          $$
+          Luckily each $q_{k_i}$ is simply a sum of incoming node outputs times weights, which $n_j$ contributes to via $w_{k_i} \cdot n_j$ <br>
+          Therefore: 
+          $$\frac{d}{dn_j}log(\text{probability}) = \sum_{i=0}^m \frac{d}{dq_{k_i}}log(\text{probability}) \cdot w_{k_i}$$ <br>
+          In similar fashion:
+          $$\frac{d}{dw_{k_i}}log(\text{probability}) = \frac{d}{dq_{k_i}}log(\text{probability}) \cdot n_{j}$$ <br>
+          And finally:
+          $$\frac{d}{dq_j}log(\text{probability}) = \frac{d}{dn_{j}}log(\text{probability}) \cdot \frac{d}{dq_j} n_j $$<br>
+        
+      <hr>
+        Intuitively, each node stores how a tiny change in that node will affect the log(probability).
+        To calculate the change for a node closer to the input, it takes all of it's downstream nodes and multiplies their effect times the weights going to them. The effect
+        of a weight on log(probability) is simply the effect of it's destination on the log(probability) times the output of it's source.
+      <br>
+      
+      <br>
+      <br>
+      <br>
+      <br>
+      <br>
+      <br>
+
+    </div>
+    
+
+
+    <span id="canvdiv2">
+    </span>
+    <span id="canvdiv3">
+    </span>
+  
+  <script>
+    
+    if(false) { 
+      var _canvdiv2 = document.getElementById("canvdiv2");
+      var fc2 = new FullScreenCanvas(undefined, _canvdiv2);
+      
+      var _canvdiv3 = document.getElementById("canvdiv3");
+      var fc3 = new FullScreenCanvas(undefined, _canvdiv3);
+   
+      fc2.forceSize(700, 500);
+      fc3.forceSize(700, 500);
+
+
+      fc2.ctx.lineWidth = "1";
+      fc2.clear();
+      fc2.sc *= 2;
+
+      fc3.ctx.lineWidth = "1";
+      fc3.clear();
+      fc3.sc *= 2;
+    }
+    
+    function mainloop() { 
+
+    }
+    setTimeout(mainloop,5);
+
+
+  
+  </script>
+</body>
+</html>
